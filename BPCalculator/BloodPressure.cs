@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 
 namespace BPCalculator
 {
@@ -31,7 +32,8 @@ namespace BPCalculator
             get
             {
                 // implement as part of project
-                throw new NotImplementedException("not implemented yet");        
+                //throw new NotImplementedException("not implemented yet");
+                return new BPCategory();                       // replace this
             }
         }
     }
