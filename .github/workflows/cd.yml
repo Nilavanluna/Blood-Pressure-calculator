@@ -1,0 +1,38 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches:
+      - main # only deploy when main is updated
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to QA
+        run: ./scripts/deploy-qa.ps1
+
+      - name: Run Smoke Tests
+        run: ./scripts/run-smoke-tests.ps1
+
+      - name: Deploy to Staging
+        run: ./scripts/deploy-staging.ps1
+
+      - name: Run E2E Tests
+        run: ./scripts/run-e2e-tests.ps1
+
+      - name: Manual Approval
+        run: echo "Waiting for production approval..." # For now, just a placeholder
+
+      - name: Deploy to Production (Blue-Green)
+        run: ./scripts/deploy-production.ps1
+
+      - name: Post-Deploy Tests
+        run: ./scripts/run-postdeploy-tests.ps1
+
+      - name: Monitoring Setup
+        run: ./scripts/monitoring-setup.ps1
