@@ -22,6 +22,14 @@ namespace BPCalculator
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            var instrumentationKey = Configuration["ApplicationInsights:InstrumentationKey"];
+            var connectionString = $"InstrumentationKey={instrumentationKey}";
+            
+            services.AddApplicationInsightsTelemetry(options =>
+            {
+                options.ConnectionString = connectionString;
+            });
+            services.AddSingleton<Microsoft.ApplicationInsights.TelemetryClient>();
             services.AddRazorPages();
         }
 
