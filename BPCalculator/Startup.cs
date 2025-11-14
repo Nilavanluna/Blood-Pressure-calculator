@@ -24,7 +24,7 @@ namespace BPCalculator
         {
             var instrumentationKey = Configuration["ApplicationInsights:InstrumentationKey"];
             var connectionString = $"InstrumentationKey={instrumentationKey}";
-            
+            // Application Insights telemetry tracking enabled
             services.AddApplicationInsightsTelemetry(options =>
             {
                 options.ConnectionString = connectionString;
