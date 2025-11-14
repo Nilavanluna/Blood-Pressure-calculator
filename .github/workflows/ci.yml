@@ -1,0 +1,37 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build application
+        run: dotnet build --no-restore
+
+      - name: Run unit tests
+        run: dotnet test BPCalculator.Tests/BPCalculator.Tests.csproj --no-build --verbosity normal
+
+      - name: Check code analysis
+        run: |
+          echo "Code analysis check would go here"
+          echo "You can integrate SonarQube or CodeQL here"
+
+      - name: Security scan
+        run: dotnet list package --vulnerable
