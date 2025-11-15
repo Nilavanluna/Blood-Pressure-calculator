@@ -1,51 +1,44 @@
 name: CD Pipeline
 
-# Trigger CD automatically after CI workflow succeeds
 on:
-  workflow_run:
-    workflows: ['CI Pipeline'] # must match the `name:` of your CI workflow
-    types:
-      - completed
+  push:
+    branches:
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
-    environment: production # enables manual approval in GitHub UI
 
     steps:
-      # 1️⃣ Checkout code
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2️⃣ Deploy to QA
+      - name: Make scripts executable
+        run: chmod +x ./scripts/*.sh
+
+      - name: Debug scripts folder
+        run: ls -la ./scripts
+
       - name: Deploy to QA
-        run: pwsh -File ./scripts/deploy-qa.ps1
+        run: bash ./scripts/deploy-qa.sh
 
-      # 3️⃣ Run Smoke Tests in QA
       - name: Run Smoke Tests
-        run: pwsh -File ./scripts/run-smoke-tests.ps1
+        run: bash ./scripts/run-smoke-tests.sh
 
-      # 4️⃣ Deploy to Staging
       - name: Deploy to Staging
-        run: pwsh -File ./scripts/deploy-staging.ps1
+        run: bash ./scripts/deploy-staging.sh
 
-      # 5️⃣ Run E2E Tests in Staging
       - name: Run E2E Tests
-        run: pwsh -File ./scripts/run-e2e-tests.ps1
+        run: bash ./scripts/run-e2e-tests.sh
 
-      # 6️⃣ Manual approval before production
-      - name: Await Production Approval
-        run: echo "Waiting for production approval..." # Replace later with GitHub Environment approvals
+      - name: Manual Approval
+        run: echo "Waiting for production approval..."
 
-      # 7️⃣ Deploy to Production (Blue-Green)
-      - name: Deploy to Production (Blue-Green)
-        run: pwsh -File ./scripts/deploy-production.ps1
+      - name: Blue-Green Switch
+        run: bash ./scripts/switch-blue-green.sh
 
-      # 8️⃣ Run Post-Deploy Tests
-      - name: Run Post-Deploy Tests
-        run: pwsh -File ./scripts/run-postdeploy-tests.ps1
+      - name: Post-Deploy Tests
+        run: bash ./scripts/run-post-deploy-tests.sh
 
-      # 9️⃣ Monitoring Setup
-      - name: Monitoring Setup
-        run: pwsh -File ./scripts/monitoring-setup.ps1
+      - name: Health Check
+        run: bash ./scripts/health-check.sh
