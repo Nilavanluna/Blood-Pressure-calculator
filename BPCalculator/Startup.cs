@@ -21,18 +21,18 @@ namespace BPCalculator
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
-        {
-            var instrumentationKey = Configuration["ApplicationInsights:InstrumentationKey"];
-            var connectionString = $"InstrumentationKey={instrumentationKey}";
-            // Application Insights telemetry tracking enabled
-            services.AddApplicationInsightsTelemetry(options =>
-            {
-                options.ConnectionString = connectionString;
-            });
-            services.AddSingleton<Microsoft.ApplicationInsights.TelemetryClient>();
-            services.AddRazorPages();
-        }
-
+{
+    var instrumentationKey = Configuration["ApplicationInsights:InstrumentationKey"];
+    var connectionString = $"InstrumentationKey={instrumentationKey}";
+    
+    services.AddApplicationInsightsTelemetry(options =>
+    {
+        options.ConnectionString = connectionString;
+    });
+    services.AddSingleton<Microsoft.ApplicationInsights.TelemetryClient>();
+    services.AddSingleton<BPCalculator.Services.BPStatisticsService>();  // ADD THIS LINE
+    services.AddRazorPages();
+}
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
