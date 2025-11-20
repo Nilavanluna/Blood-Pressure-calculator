@@ -28,10 +28,11 @@ jobs:
       - name: Run unit tests
         run: dotnet test BPCalculator.Tests/BPCalculator.Tests.csproj --no-build --verbosity normal
 
-      - name: Check code analysis
-        run: |
-          echo "Code analysis check would go here"
-          echo "You can integrate SonarQube or CodeQL here"
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Security scan
         run: dotnet list package --vulnerable
