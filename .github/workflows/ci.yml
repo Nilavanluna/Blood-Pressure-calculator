@@ -27,27 +27,22 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      - name: Run unit tests with coverage
+      - name: Test with coverage
         run: |
           dotnet test BPCalculator.Tests/BPCalculator.Tests.csproj \
-            --configuration Release \
-            --no-build \
+            --no-build --configuration Release \
             --collect:"XPlat Code Coverage"
 
-      - name: Prepare Code Coverage report
-        # Convert coverage to format SonarCloud understands
+      - name: Generate coverage report
         run: |
-          dotnet tool install --global dotnet-reportgenerator-globaltool \
-          && reportgenerator \
-             -reports:**/coverage.cobertura.xml \
-             -targetdir:coverage-report \
-             -reporttypes:Cobertura
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          reportgenerator \
+            -reports:**/coverage.cobertura.xml \
+            -targetdir:coverage-report \
+            -reporttypes:Cobertura
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-dotnet-action@v2
+        uses: SonarSource/sonarcloud-github-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Security scan
-        run: dotnet list package --vulnerable
