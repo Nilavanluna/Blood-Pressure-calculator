@@ -7,12 +7,12 @@ on:
     branches: [main, develop]
 
 jobs:
-  build-and-test:
+  build-and-analyze:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -24,17 +24,30 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build application
-        run: dotnet build --no-restore
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
 
-      - name: Run unit tests
-        run: dotnet test BPCalculator.Tests/BPCalculator.Tests.csproj --no-build --verbosity normal
+      - name: Run unit tests with coverage
+        run: |
+          dotnet test BPCalculator.Tests/BPCalculator.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --collect:"XPlat Code Coverage"
+
+      - name: Prepare Code Coverage report
+        # Convert coverage to format SonarCloud understands
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool \
+          && reportgenerator \
+             -reports:**/coverage.cobertura.xml \
+             -targetdir:coverage-report \
+             -reporttypes:Cobertura
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarcloud-dotnet-action@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Security scan
         run: dotnet list package --vulnerable
