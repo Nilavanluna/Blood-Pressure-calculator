@@ -2,7 +2,7 @@ services:
   - type: web
     name: bp-calculator-qa
     env: docker
-    region: frankfurt # Closest to Ireland
+    region: frankfurt # Closest region to Ireland
     plan: free
     branch: main
     dockerfilePath: ./Dockerfile
