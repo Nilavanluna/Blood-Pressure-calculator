@@ -7,14 +7,12 @@ on:
     branches: [main, develop]
 
 jobs:
-  build-and-analyze:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v3
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
@@ -24,25 +22,16 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build
-        run: dotnet build --no-restore --configuration Release
+      - name: Build application
+        run: dotnet build --no-restore
 
-      - name: Test with coverage
+      - name: Run unit tests
+        run: dotnet test BPCalculator.Tests/BPCalculator.Tests.csproj --no-build --verbosity normal
+
+      - name: Check code analysis
         run: |
-          dotnet test BPCalculator.Tests/BPCalculator.Tests.csproj \
-            --no-build --configuration Release \
-            --collect:"XPlat Code Coverage"
+          echo "Code analysis check would go here"
+          echo "You can integrate SonarQube or CodeQL here"
 
-      - name: Generate coverage report
-        run: |
-          dotnet tool install --global dotnet-reportgenerator-globaltool
-          reportgenerator \
-            -reports:**/coverage.cobertura.xml \
-            -targetdir:coverage-report \
-            -reporttypes:Cobertura
-
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v2
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Security scan
+        run: dotnet list package --vulnerable

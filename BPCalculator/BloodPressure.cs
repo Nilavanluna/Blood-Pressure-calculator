@@ -38,16 +38,10 @@ namespace BPCalculator
                 }
 
                 // ---- Blood Pressure Classification ----
-                // CHECK HIGH FIRST (highest priority)
-                if (Systolic >= 140 || Diastolic >= 90)
+                // Low Blood Pressure
+                if (Systolic < 90 && Diastolic < 60)
                 {
-                    return BPCategory.High;
-                }
-
-                // Pre-High Blood Pressure
-                else if ((Systolic >= 120 && Systolic <= 139) || (Diastolic >= 80 && Diastolic <= 89))
-                {
-                    return BPCategory.PreHigh;
+                    return BPCategory.Low;
                 }
 
                 // Ideal Blood Pressure
@@ -56,10 +50,16 @@ namespace BPCalculator
                     return BPCategory.Ideal;
                 }
 
-                // Low Blood Pressure (default/lowest priority)
+                // Pre-High Blood Pressure
+                else if ((Systolic >= 120 && Systolic <= 139) || (Diastolic >= 80 && Diastolic <= 89))
+                {
+                    return BPCategory.PreHigh;
+                }
+
+                // High Blood Pressure
                 else
                 {
-                    return BPCategory.Low;
+                    return BPCategory.High;
                 }
             }
         }
