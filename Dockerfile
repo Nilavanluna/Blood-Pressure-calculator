@@ -1,23 +1,37 @@
-# Use .NET 9 SDK for building
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
-WORKDIR /app
+<Project Sdk="Microsoft.NET.Sdk">
 
-# Copy csproj and restore dependencies
-COPY BPCalculator/*.csproj ./BPCalculator/
-RUN dotnet restore ./BPCalculator/BPCalculator.csproj
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
 
-# Copy everything else and build
-COPY BPCalculator/. ./BPCalculator/
-WORKDIR /app/BPCalculator
-RUN dotnet publish -c Release -o out
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.0" />
+    <PackageReference Include="xunit" Version="2.9.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    
+    <!-- SpecFlow BDD Framework -->
+    <PackageReference Include="SpecFlow" Version="3.9.74" />
+    <PackageReference Include="SpecFlow.xUnit" Version="3.9.74" />
+    <PackageReference Include="SpecFlow.Tools.MsBuild.Generation" Version="3.9.74" />
+    
+    <!-- Selenium for E2E Testing -->
+    <PackageReference Include="Selenium.WebDriver" Version="4.16.2" />
+    <PackageReference Include="Selenium.WebDriver.ChromeDriver" Version="120.0.6099.7100" />
+  </ItemGroup>
 
-# Build runtime image
-FROM mcr.microsoft.com/dotnet/aspnet:9.0
-WORKDIR /app
-COPY --from=build /app/BPCalculator/out .
+  <ItemGroup>
+    <ProjectReference Include="..\BPCalculator\BPCalculator.csproj" />
+  </ItemGroup>
 
-# Render uses port 10000
-ENV ASPNETCORE_URLS=http://0.0.0.0:10000
-EXPOSE 10000
-
-ENTRYPOINT ["dotnet", "BPCalculator.dll"]
+</Project>
