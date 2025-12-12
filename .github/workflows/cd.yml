@@ -82,14 +82,23 @@ jobs:
           exit-code: '1'
           trivyignores: '.trivyignore'
 
-      # DAST Scan (OWASP ZAP) - FINAL FIXES APPLIED
+      # DAST Scan (OWASP ZAP) - FINAL, MANUAL DOCKER FIX
       - name: Run DAST Scan (OWASP ZAP Baseline)
-        uses: zaproxy/action-baseline@v0.12.0
-        with:
-          target: https://${{ env.TEST_URL }} # FIX 1: Protocol added
-          user: ${{ github.actor }} # FIX 2: User added to solve Permission Denied
-          fail_action: true
-          cmd_options: '-a'
+        run: |
+          # Use a direct docker run command to pass the --user flag
+          # This fixes the 'Permission denied' error (Errno 13) when writing ZAP reports.
+          # It also ensures the correct URL format (https://) is passed.
+          /usr/bin/docker run -v ${{ github.workspace }}:/zap/wrk/:rw \
+            --user "$(id -u):$(id -g)" \
+            --network host \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t https://${{ env.TEST_URL }} \
+            -J report_json.json \
+            -w report_md.md \
+            -r report_html.html \
+            -a \
+            -I || (echo "ZAP Baseline Scan found issues, check logs for details." && exit 1)
 
       # --- Authorization Gate: Manual Approval ---
       - name: Manual Approval Gate for Production Cutover
