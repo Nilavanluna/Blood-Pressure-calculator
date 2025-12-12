@@ -7,6 +7,7 @@ on:
       - completed
     branches:
       - main
+  workflow_dispatch: # Allows manual trigger
 
 env:
   IMAGE_NAME: bp-calculator
@@ -33,11 +34,13 @@ jobs:
         run: scripts/run-smoke-tests.sh
 
   # ------------------------------------------------------------------------
-  # JOB 2: Staging Deployment & Pre-Prod Testing (Blue/Green)
+  # JOB 2: Staging Deployment & Pre-Production Testing (Blue/Green)
   # ------------------------------------------------------------------------
   staging_deployment:
     needs: qa_deployment
     runs-on: ubuntu-latest
+
+    # Environment approval handled in GitHub settings
     environment:
       name: Staging
 
@@ -55,10 +58,9 @@ jobs:
         run: scripts/run-e2e-tests.sh
 
       - name: Setup k6 for Performance Testing
-        uses: uses: k6io/action@v0.2.0
+        uses: k6io/action@v0.3.0
 
-
-      - name: Run Performance Tests on Green Environment
+      - name: Run Performance Tests on Green Environment (k6)
         run: scripts/run-performance-tests.sh
 
       - name: Run Vulnerability Scan (Trivy)
@@ -69,6 +71,7 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
 
+      # Manual approval before production deployment
       - name: Manual Approval Gate for Production Cutover
         uses: trstringer/manual-approval@v1
         if: success()
