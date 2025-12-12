@@ -1,20 +1,24 @@
 #!/bin/bash
 
-# You will need to install k6 on your CI/CD runner.
-# The URL to test needs to be an environment variable set in your pipeline config (e.g., $STAGING_URL)
-
+# This script receives the deployment URL as the first command-line argument ($1)
+URL_TO_TEST="$1" 
 K6_SCRIPT="scripts/performance-test.js"
-URL_TO_TEST="http://your-deployed-url.com" # Replace with actual dynamic variable
+
+if [ -z "$URL_TO_TEST" ]; then
+    echo "ERROR: Deployment URL is missing. Cannot run performance tests."
+    exit 1
+fi
 
 echo "Running k6 performance tests against $URL_TO_TEST"
 
-# Replace the URL in the k6 script and run the test
-# Note: You need to pass the URL to the k6 script as an environment variable or via command line arguments.
-
-k6 run --vus 10 --duration 30s --base-url "$URL_TO_TEST" "$K6_SCRIPT"
+# Use --env to set the K6_BASE_URL environment variable inside the k6 runtime.
+# This environment variable is read by the performance-test.js script.
+k6 run \
+  --env K6_BASE_URL="$URL_TO_TEST" \
+  "$K6_SCRIPT"
 
 if [ $? -ne 0 ]; then
-    echo "Performance tests failed!"
+    echo "Performance tests failed! Check k6 output above."
     exit 1
 fi
 
