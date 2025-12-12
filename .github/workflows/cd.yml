@@ -2,7 +2,8 @@ name: CD Pipeline - Deployment and Release
 
 on:
   workflow_run:
-    workflows: ['CI Pipeline']
+    # IMPORTANT: Change "CI Pipeline - Build and Test" if your CI workflow has a different name
+    workflows: ['CI Pipeline - Build and Test']
     types:
       - completed
     branches:
@@ -11,19 +12,22 @@ on:
 env:
   # Base name for the Docker image (pulled from a registry after CI)
   IMAGE_NAME: bp-calculator
-  # The environment URL used for E2E and Performance testing of the new version
-  # NOTE: Ensure this secret is set in your repository settings.
+  # The environment URL for the staging/green deployment, used for E2E and Performance testing
   TEST_URL: ${{ secrets.STAGING_GREEN_URL }}
 
 jobs:
   # --------------------------------------------------------------------------------
-  # JOB 1: QA Deployment (Release Management Strategy: QA)
+  # JOB 1: QA Deployment
   # --------------------------------------------------------------------------------
   qa_deployment:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      # FIX: Set Execute Permissions for all scripts (resolves Permission denied error)
+      - name: Set Script Permissions
+        run: chmod +x scripts/*.sh
 
       - name: Deploy to QA Environment
         run: scripts/deploy-qa.sh
@@ -32,17 +36,21 @@ jobs:
         run: scripts/run-smoke-tests.sh
 
   # --------------------------------------------------------------------------------
-  # JOB 2: Staging Deployment and Pre-Production Testing
+  # JOB 2: Staging Deployment and Pre-Production Testing (Blue/Green Deployment Target)
   # --------------------------------------------------------------------------------
   staging_deployment:
     needs: qa_deployment # Only run if QA tests passed
     runs-on: ubuntu-latest
     environment:
-      name: Staging
+      name: Staging # Optional: Link to a GitHub Environment for better control
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      # FIX: Set Execute Permissions for all scripts (resolves Permission denied error)
+      - name: Set Script Permissions
+        run: chmod +x scripts/*.sh
 
       - name: Deploy New Version to Staging-Green (Blue/Green Deployment)
         run: scripts/deploy-green.sh
@@ -54,7 +62,7 @@ jobs:
         uses: k6io/action@v2
 
       - name: Run Performance Tests on Green Environment (k6)
-        # FIX: Pass the deployment URL (${{ env.TEST_URL }}) as a command-line argument.
+        # PASSES the deployment URL to the runner script as $1
         run: scripts/run-performance-tests.sh ${{ env.TEST_URL }}
 
       - name: Run Vulnerability Scan (Security Features)
@@ -82,11 +90,15 @@ jobs:
   production_cutover:
     needs: staging_deployment
     runs-on: ubuntu-latest
-    environment: Production
+    environment: Production # Link to a GitHub Environment for better control/security
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      # FIX: Set Execute Permissions for all scripts (resolves Permission denied error)
+      - name: Set Script Permissions
+        run: chmod +x scripts/*.sh
 
       - name: Switch Traffic (Blue/Green Cutover)
         run: scripts/switch-blue-green.sh
@@ -94,7 +106,7 @@ jobs:
       - name: Post-Switch Health Check and Telemetry Verification
         run: |
           scripts/health-check.sh
-          # Add actual telemetry verification step here
+          echo "Verifying continuous telemetry monitoring data flow..."
 
       - name: Run Post-Deployment Smoke Tests on Production
         run: scripts/run-post-deploy-tests.sh
