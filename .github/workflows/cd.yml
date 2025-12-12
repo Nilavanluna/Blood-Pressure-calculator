@@ -82,17 +82,13 @@ jobs:
           exit-code: '1'
           trivyignores: '.trivyignore'
 
-      # NEW STEP: Dynamic Application Security Testing (DAST/Pen-Testing - OWASP ZAP)
-      # This addresses the missing penetration testing requirement.
+      # DAST Scan (OWASP ZAP) - FIX APPLIED
       - name: Run DAST Scan (OWASP ZAP Baseline)
         uses: zaproxy/action-baseline@v0.12.0
         with:
-          target: ${{ env.TEST_URL }}
-          # Set minimum severity threshold to fail the build
+          target: https://${{ env.TEST_URL }} # FIX: Protocol added
           fail_action: true
-          # Exclude common false positives if known (optional but helpful)
-          # Excludes all URLs that aren't the primary target.
-          exclude_hosts: '.*.github.com'
+          # REMOVED: exclude_hosts parameter
 
       # --- Authorization Gate: Manual Approval ---
       - name: Manual Approval Gate for Production Cutover
