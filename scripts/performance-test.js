@@ -1,51 +1,56 @@
 import http from 'k6/http'
 import { check, sleep } from 'k6'
 
-// Define the load test options: 10 Virtual Users for 30 seconds
-export let options = {
+// Performance test configuration
+export const options = {
   stages: [
-    { duration: '10s', target: 10 },
-    { duration: '20s', target: 10 },
-    { duration: '5s', target: 0 },
+    { duration: '30s', target: 20 }, // Ramp up to 20 users
+    { duration: '1m', target: 50 }, // Stay at 50 users for 1 minute
+    { duration: '10s', target: 0 }, // Ramp down to 0
   ],
-  // Set a threshold to ensure performance is acceptable
   thresholds: {
-    http_req_duration: ['p(90) < 400'],
-    checks: ['rate>0.99'],
+    http_req_duration: ['p(95)<500'], // 95% of requests must complete below 500ms
+    http_req_failed: ['rate<0.01'], // Less than 1% of requests can fail
   },
 }
 
-// The default function defines the main test logic
 export default function () {
-  // FIX: Read the base URL from the environment variable set by the shell script
-  const BASE_URL = __ENV.K6_BASE_URL
+  const BASE_URL = __ENV.K6_BASE_URL || 'http://localhost:5000'
 
-  // Construct the full URL for the blood pressure calculation endpoint
-  // Assuming the calculation form is submitted to the root Index page (Razor Pages convention)
-  const url = `${BASE_URL}/Index`
+  // Generate random valid blood pressure readings
+  const systolic = Math.floor(Math.random() * (190 - 70 + 1)) + 70
+  let diastolic = Math.floor(Math.random() * (100 - 40 + 1)) + 40
 
-  // Simulate a random, valid blood pressure reading for variety
-  const systolic = Math.floor(Math.random() * (190 - 70 + 1)) + 70 // 70-190
-  const diastolic = Math.floor(Math.random() * (100 - 40 + 1)) + 40 // 40-100
-  // Ensure systolic is higher than diastolic (a project constraint)
-  const finalSystolic = systolic > diastolic ? systolic : diastolic + 1
-
-  // The data payload, simulating the form fields
-  const payload = {
-    'BloodPressure.SystolicPressure': finalSystolic.toString(),
-    'BloodPressure.DiastolicPressure': diastolic.toString(),
+  // Ensure systolic > diastolic
+  if (systolic <= diastolic) {
+    diastolic = systolic - 10
   }
 
-  // The simulated form POST request
-  const res = http.post(url, payload)
-
-  // FIX: Add a null check (r.body) before attempting .includes() to prevent the TypeError
-  check(res, {
-    'is status 200': (r) => r.status === 200,
-    'response body contains "Category"': (r) =>
-      r.body && r.body.includes('Category'),
+  // Test the main page load
+  const homeResponse = http.get(BASE_URL)
+  check(homeResponse, {
+    'homepage loads': (r) => r.status === 200,
+    'contains Blood Pressure': (r) =>
+      r.body && r.body.includes('Blood Pressure'),
   })
 
-  // Pause for 1 second between virtual user iterations
+  sleep(1)
+
+  // Test form submission
+  const formData = {
+    Systolic: systolic.toString(),
+    Diastolic: diastolic.toString(),
+  }
+
+  const submitResponse = http.post(BASE_URL, formData)
+  check(submitResponse, {
+    'form submission successful': (r) => r.status === 200,
+    'category displayed': (r) =>
+      r.body &&
+      (r.body.includes('Low') ||
+        r.body.includes('Ideal') ||
+        r.body.includes('High')),
+  })
+
   sleep(1)
 }

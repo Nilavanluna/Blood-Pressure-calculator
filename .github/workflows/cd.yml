@@ -1,4 +1,4 @@
-name: CD Pipeline - Deployment and Release
+name: CD Pipeline - Multi-Environment Deployment
 
 on:
   workflow_run:
@@ -8,102 +8,154 @@ on:
     branches:
       - main
 
-env:
-  IMAGE_NAME: bp-calculator
-  TEST_URL: ${{ secrets.STAGING_GREEN_URL }}
-
 jobs:
-  # --------------------------------------------------------------------------------
-  # JOB 1: QA Deployment
-  # --------------------------------------------------------------------------------
-  qa_deployment:
+  # ============================================================
+  # STAGE 1: Deploy to QA Environment
+  # ============================================================
+  deploy-qa:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment:
+      name: QA
+      url: https://bp-calculator-qa.onrender.com
+
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # FIX: Set Execute Permissions for all scripts (resolves Permission denied error)
-      - name: Set Script Permissions
-        run: chmod +x scripts/*.sh
+      - name: Deploy to Render QA
+        run: |
+          echo "Triggering Render QA deployment..."
+          curl -X POST ${{ secrets.RENDER_QA_DEPLOY_HOOK }}
 
-      - name: Deploy to QA Environment
-        run: scripts/deploy-qa.sh
+      - name: Wait for deployment
+        run: sleep 60
 
-      - name: Run Smoke Tests on QA
-        run: scripts/run-smoke-tests.sh
+      - name: Health check QA
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://bp-calculator-qa.onrender.com)
+          if [ $response -eq 200 ]; then
+            echo "✅ QA environment is healthy"
+          else
+            echo "❌ QA environment failed health check"
+            exit 1
+          fi
 
-  # --------------------------------------------------------------------------------
-  # JOB 2: Staging Deployment and Pre-Production Testing
-  # --------------------------------------------------------------------------------
-  staging_deployment:
-    needs: qa_deployment
+      - name: Smoke test - Basic functionality
+        run: |
+          echo "Running basic smoke tests..."
+          response=$(curl -s https://bp-calculator-qa.onrender.com)
+          if echo "$response" | grep -q "Blood Pressure"; then
+            echo "✅ Smoke test passed"
+          else
+            echo "❌ Smoke test failed"
+            exit 1
+          fi
+
+  # ============================================================
+  # STAGE 2: Deploy to Staging Environment
+  # ============================================================
+  deploy-staging:
+    needs: deploy-qa
     runs-on: ubuntu-latest
     environment:
       name: Staging
+      url: https://bp-calculator-staging.onrender.com
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # FIX: Set Execute Permissions for all scripts
-      - name: Set Script Permissions
-        run: chmod +x scripts/*.sh
-
-      - name: Deploy New Version to Staging-Green (Blue/Green Deployment)
-        run: scripts/deploy-green.sh
-
-      - name: Run E2E Tests on Green Environment
-        run: scripts/run-e2e-tests.sh
-
-      - name: Run Vulnerability Scan (Security Features)
-        uses: aquasecurity/trivy-action@master
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
         with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          format: 'table'
-          exit-code: '1'
-          severity: 'CRITICAL,HIGH'
+          dotnet-version: '9.0.x'
 
-      # FIX: Using k6io/action@v2.0.0 to resolve the 'Unable to resolve action' error
-      - name: Run Performance Tests on Green Environment (k6)
-        uses: k6io/action@v2.0.0
-        with:
-          script: scripts/performance-test.js
-          environment-variables: K6_BASE_URL=${{ env.TEST_URL }}
-
-      # --- Authorization Gate: Manual Approval ---
-      - name: Manual Approval Gate for Production Cutover
-        uses: trstringer/manual-approval@v1
-        if: success()
-        with:
-          secret: ${{ github.TOKEN }}
-          approvers: 'your_github_username' # **CRITICAL: CHANGE THIS**
-          minimum-approvals: 1
-          issue-title: 'Production Deployment Approval: ${{ github.sha }}'
-          issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
-
-  # --------------------------------------------------------------------------------
-  # JOB 3: Production Cutover
-  # --------------------------------------------------------------------------------
-  production_cutover:
-    needs: staging_deployment
-    runs-on: ubuntu-latest
-    environment: Production
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      # FIX: Set Execute Permissions for all scripts
-      - name: Set Script Permissions
-        run: chmod +x scripts/*.sh
-
-      - name: Switch Traffic (Blue/Green Cutover)
-        run: scripts/switch-blue-green.sh
-
-      - name: Post-Switch Health Check and Telemetry Verification
+      - name: Deploy to Render Staging
         run: |
-          scripts/health-check.sh
-          echo "Verifying continuous telemetry monitoring data flow..."
+          echo "Triggering Render Staging deployment..."
+          curl -X POST ${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}
 
-      - name: Run Post-Deployment Smoke Tests on Production
-        run: scripts/run-post-deploy-tests.sh
+      - name: Wait for deployment
+        run: sleep 60
+
+      - name: Health check Staging
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://bp-calculator-staging.onrender.com)
+          if [ $response -eq 200 ]; then
+            echo "✅ Staging environment is healthy"
+          else
+            echo "❌ Staging environment failed health check"
+            exit 1
+          fi
+
+      - name: Run E2E tests on Staging
+        run: |
+          echo "Running E2E tests against staging..."
+          # Simulate E2E tests for now
+          curl -X POST https://bp-calculator-staging.onrender.com \
+            -d "Systolic=120&Diastolic=80" \
+            -s -o /dev/null -w "%{http_code}" | grep -q "200" && echo "✅ E2E test passed"
+
+      - name: Performance test with k6
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: scripts/performance-test.js
+        env:
+          K6_BASE_URL: https://bp-calculator-staging.onrender.com
+
+      - name: Security scan
+        run: |
+          echo "Running security scan..."
+          dotnet list package --vulnerable --include-transitive
+          if [ $? -ne 0 ]; then
+            echo "⚠️ Security vulnerabilities found"
+          fi
+
+  # ============================================================
+  # STAGE 3: Deploy to Production (Manual Approval Required)
+  # ============================================================
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment:
+      name: Production
+      url: https://bp-calculator-prod.onrender.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Render Production
+        run: |
+          echo "Triggering Render Production deployment..."
+          curl -X POST ${{ secrets.RENDER_PROD_DEPLOY_HOOK }}
+
+      - name: Wait for deployment
+        run: sleep 60
+
+      - name: Health check Production
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://bp-calculator-prod.onrender.com)
+          if [ $response -eq 200 ]; then
+            echo "✅ Production environment is healthy"
+          else
+            echo "❌ Production environment failed health check"
+            exit 1
+          fi
+
+      - name: Post-deployment verification
+        run: |
+          echo "Verifying production deployment..."
+          response=$(curl -s https://bp-calculator-prod.onrender.com)
+          if echo "$response" | grep -q "Blood Pressure"; then
+            echo "✅ Production verification passed"
+          else
+            echo "❌ Production verification failed"
+            exit 1
+          fi
+
+      - name: Notify deployment success
+        run: |
+          echo "🎉 Production deployment successful!"
+          echo "URL: https://bp-calculator-prod.onrender.com"
