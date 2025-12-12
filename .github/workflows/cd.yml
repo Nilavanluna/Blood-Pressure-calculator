@@ -85,11 +85,10 @@ jobs:
       # DAST Scan (OWASP ZAP) - FINAL, MANUAL DOCKER FIX
       - name: Run DAST Scan (OWASP ZAP Baseline)
         run: |
-          # Use a direct docker run command to pass the --user flag
-          # This fixes the 'Permission denied' error (Errno 13) when writing ZAP reports.
-          # It also ensures the correct URL format (https://) is passed.
+          # Use a direct docker run command with all required flags.
           /usr/bin/docker run -v ${{ github.workspace }}:/zap/wrk/:rw \
-            --user "$(id -u):$(id -g)" \
+            -w /zap/wrk \                                 # FIX: Sets working directory to the mounted volume
+            --user "$(id -u):$(id -g)" \                  # FIX: Sets user to fix permission denied
             --network host \
             -t ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
