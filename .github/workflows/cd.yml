@@ -10,6 +10,7 @@ on:
 
 env:
   IMAGE_NAME: bp-calculator
+  TEST_URL: https://blood-pressure-calculator.onrender.com
 
 jobs:
   # --------------------------------------------------------------------------------
@@ -78,25 +79,11 @@ jobs:
           trivyignores: .trivyignore
 
       # ------------------------------------------
-      # OWASP ZAP DAST Scan — Render Dynamic URL
+      # OWASP ZAP DAST Scan — Fixed Target URL
       # ------------------------------------------
       - name: Run DAST Scan (OWASP ZAP Baseline)
         run: |
-          SERVICE_ID="${{ secrets.RENDER_GREEN_SERVICE_ID }}"
-          RENDER_API_KEY="${{ secrets.RENDER_API_KEY }}"
-
-          TARGET_URL=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
-            "https://api.render.com/v1/services/$SERVICE_ID" | jq -r '.serviceDetails.url')
-
-          if [ -z "$TARGET_URL" ] || [ "$TARGET_URL" == "null" ]; then
-            echo "Error: Could not fetch TARGET_URL from Render. Check your service ID and API key."
-            exit 1
-          fi
-
-          # Add https:// if missing
-          if ! [[ "$TARGET_URL" =~ ^https?:// ]]; then
-            TARGET_URL="https://$TARGET_URL"
-          fi
+          TARGET_URL="${{ env.TEST_URL }}"
 
           echo "ZAP scanning target: $TARGET_URL"
 
