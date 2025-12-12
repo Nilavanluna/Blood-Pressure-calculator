@@ -7,13 +7,10 @@ on:
     branches: [main, develop]
 
 env:
-  # Define the base name for the Docker image
+  # CRITICAL FIX: Only define simple, non-referential variables here.
+  # The complex FULL_IMAGE_NAME definition must be moved to the step.
   IMAGE_NAME: bp-calculator
-  # Define the full path for the Docker image, ensuring lowercase repository owner for GHCR
-  # This uses the same logic as the fix we applied to the CD file.
   REGISTRY: ghcr.io
-  FULL_IMAGE_NAME: ${{ env.REGISTRY }}/${{ toLower(github.repository_owner) }}/${{ env.IMAGE_NAME }}
-  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   build-and-test:
@@ -48,14 +45,13 @@ jobs:
         run: dotnet list package --vulnerable
 
       # ====================================================================
-      # FIX: Docker Build and Push Steps
+      # Docker Build and Push Steps
       # ====================================================================
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          # Use GITHUB_TOKEN to authenticate push to GHCR
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Push Docker Image to GHCR
@@ -63,6 +59,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.FULL_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          # Assuming you have a standard Dockerfile in the repository root
+          # FINAL FIX: Build the complex tag string here using the ${{ ... }} expression.
+          # toLower() is valid in this context, and env variables are referenced correctly.
+          tags: ${{ env.REGISTRY }}/${{ toLower(github.repository_owner) }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           file: ./Dockerfile
