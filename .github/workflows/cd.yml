@@ -2,6 +2,7 @@ name: CD Pipeline - Deployment and Release
 
 on:
   workflow_run:
+    # IMPORTANT: Ensure this matches the exact name of your CI workflow
     workflows: ['CI Pipeline - Build and Test']
     types:
       - completed
@@ -40,6 +41,12 @@ jobs:
     environment:
       name: Staging
 
+    # CRITICAL FIX: Explicitly grant permissions for the token to create issues
+    # This solves the 403 error for the manual approval gate.
+    permissions:
+      issues: write
+      pull-requests: write
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -74,9 +81,9 @@ jobs:
           format: 'table'
           severity: 'CRITICAL'
           exit-code: '1'
-          trivyignores: '.trivyignore' # Requires a .trivyignore file in root
+          trivyignores: '.trivyignore' # This assumes you have committed a .trivyignore file
 
-      # The k6 performance test step has been REMOVED as requested.
+      # The Performance Tests step has been removed as requested.
 
       # --- Authorization Gate: Manual Approval ---
       - name: Manual Approval Gate for Production Cutover
@@ -84,7 +91,7 @@ jobs:
         if: success()
         with:
           secret: ${{ github.TOKEN }}
-          approvers: 'Nilavanluna'
+          approvers: 'Nilavanluna' # Your confirmed username
           minimum-approvals: 1
           issue-title: 'Production Deployment Approval: ${{ github.sha }}'
           issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
