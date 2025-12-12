@@ -2,7 +2,7 @@ name: CD Pipeline - Deployment and Release
 
 on:
   workflow_run:
-    workflows: ['CI Pipeline - Build and Test']
+    workflows: ['CI Pipeline']
     types:
       - completed
     branches:
