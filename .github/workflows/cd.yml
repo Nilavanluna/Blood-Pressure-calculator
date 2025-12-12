@@ -13,14 +13,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set secrets
-        run: |
-          echo "BLUE=$RENDER_BLUE_SERVICE_ID"
-          echo "GREEN=$RENDER_GREEN_SERVICE_ID"
-          echo "DOMAIN=$CUSTOM_DOMAIN"
-
       - name: Make scripts executable
         run: chmod +x ./scripts/*.sh
+
+      - name: Debug scripts folder
+        run: ls -la ./scripts
 
       - name: Deploy to QA
         run: bash ./scripts/deploy-qa.sh
@@ -34,8 +31,11 @@ jobs:
       - name: Run E2E Tests
         run: bash ./scripts/run-e2e-tests.sh
 
-      - name: Manual Approval
-        run: echo "Awaiting manual production approval..."
+      # REAL MANUAL APPROVAL GATE
+      - name: Wait for Production Approval
+        environment:
+          name: production
+        run: echo "Approved for production deployment"
 
       - name: Deploy to Green (Production)
         run: bash ./scripts/deploy-green.sh
