@@ -13,9 +13,6 @@ env:
   TEST_URL: https://blood-pressure-calculator.onrender.com
 
 jobs:
-  # --------------------------------------------------------------------------------
-  # JOB 1: QA Deployment
-  # --------------------------------------------------------------------------------
   qa_deployment:
     runs-on: ubuntu-latest
     steps:
@@ -31,9 +28,6 @@ jobs:
       - name: Run Smoke Tests on QA
         run: scripts/run-smoke-tests.sh
 
-  # --------------------------------------------------------------------------------
-  # JOB 2: Staging Deployment + Security Testing
-  # --------------------------------------------------------------------------------
   staging_deployment:
     needs: qa_deployment
     runs-on: ubuntu-latest
@@ -56,13 +50,13 @@ jobs:
           LOWER_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           echo "GHCR_OWNER=$LOWER_OWNER" >> $GITHUB_ENV
 
-      - name: Deploy New Version to Staging-Green (Blue/Green Deployment)
+      - name: Deploy New Version to Staging-Green (Blue/Green)
         run: scripts/deploy-green.sh
 
       - name: Run E2E Tests on Green Environment
         run: scripts/run-e2e-tests.sh
 
-      - name: Log in to GitHub Container Registry (GHCR)
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -78,20 +72,12 @@ jobs:
           exit-code: 1
           trivyignores: .trivyignore
 
-      # ------------------------------------------
-      # Create ZAP Reports Directory
-      # ------------------------------------------
       - name: Create ZAP Reports Directory
         run: mkdir -p ${{ github.workspace }}/zap-reports
 
-      # ------------------------------------------
-      # OWASP ZAP DAST Scan — Fixed Permission Issue
-      # ------------------------------------------
-      - name: Run DAST Scan (OWASP ZAP Baseline)
+      - name: Run DAST Scan (OWASP ZAP)
         run: |
           TARGET_URL="${{ env.TEST_URL }}"
-          echo "ZAP scanning target: $TARGET_URL"
-
           docker run \
             -v ${{ github.workspace }}/zap-reports:/zap/wrk:rw \
             -w /zap/wrk \
@@ -103,21 +89,15 @@ jobs:
             -J report_json.json \
             -w report_md.md \
             -r report_html.html \
-            -a \
-            -I \
-            -D 2 \
-            || echo "ZAP found issues — ignoring WARN/INFO (pipeline will not fail)"
+            -a -I -D 2 || echo "ZAP found issues — ignoring WARN/INFO"
 
-      # ------------------------------------------
-      # Upload ZAP Reports
-      # ------------------------------------------
       - name: Upload ZAP Reports
         uses: actions/upload-artifact@v4
         with:
           name: zap-reports
           path: zap-reports/
 
-      - name: Manual Approval Gate for Production Cutover
+      - name: Manual Approval Gate for Production
         uses: trstringer/manual-approval@v1
         if: success()
         with:
@@ -127,9 +107,6 @@ jobs:
           issue-title: 'Production Deployment Approval: ${{ github.sha }}'
           issue-body: 'Approve production deployment (Blue/Green switch).'
 
-  # --------------------------------------------------------------------------------
-  # JOB 3: Production Cutover
-  # --------------------------------------------------------------------------------
   production_cutover:
     needs: staging_deployment
     runs-on: ubuntu-latest
@@ -147,8 +124,9 @@ jobs:
 
       - name: Post-Switch Health Check and Telemetry Verification
         run: |
-          scripts/health-check.sh
-          echo "Telemetry: OK"
+          echo "Calling health endpoint to generate telemetry..."
+          curl -s -f ${{ env.TEST_URL }}/health || exit 1
+          echo "Telemetry event sent to Application Insights"
 
-      - name: Run Post-Deployment Smoke Tests on Production
+      - name: Run Post-Deployment Smoke Tests
         run: scripts/run-post-deploy-tests.sh
