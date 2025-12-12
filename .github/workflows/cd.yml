@@ -84,7 +84,7 @@ jobs:
         if: success()
         with:
           secret: ${{ github.TOKEN }}
-          approvers: 'your_github_username' # **CRITICAL: CHANGE THIS**
+          approvers: 'Nilavanluna'
           minimum-approvals: 1
           issue-title: 'Production Deployment Approval: ${{ github.sha }}'
           issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
