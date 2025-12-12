@@ -2,31 +2,29 @@ name: CD Pipeline - Deployment and Release
 
 on:
   workflow_run:
-    # IMPORTANT: Change "CI Pipeline - Build and Test" if your CI workflow has a different name
     workflows: ['CI Pipeline']
     types:
       - completed
     branches:
       - main
+  workflow_dispatch: # Allows manual trigger of the CD pipeline
 
 env:
-  # Base name for the Docker image (pulled from a registry after CI)
   IMAGE_NAME: bp-calculator
-  # The environment URL for the staging/green deployment, used for E2E and Performance testing
-  TEST_URL: ${{ secrets.STAGING_GREEN_URL }}
+  TEST_URL: ${{ secrets.STAGING_GREEN_URL }} # Must be full URL: https://staging.example.com
 
 jobs:
-  # --------------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
   # JOB 1: QA Deployment
-  # --------------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
   qa_deployment:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # FIX: Set Execute Permissions for all scripts (resolves Permission denied error)
-      - name: Set Script Permissions
+      - name: Make scripts executable
         run: chmod +x scripts/*.sh
 
       - name: Deploy to QA Environment
@@ -35,21 +33,20 @@ jobs:
       - name: Run Smoke Tests on QA
         run: scripts/run-smoke-tests.sh
 
-  # --------------------------------------------------------------------------------
-  # JOB 2: Staging Deployment and Pre-Production Testing (Blue/Green Deployment Target)
-  # --------------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # JOB 2: Staging Deployment & Pre-Production Testing (Blue/Green)
+  # ------------------------------------------------------------------------
   staging_deployment:
-    needs: qa_deployment # Only run if QA tests passed
+    needs: qa_deployment
     runs-on: ubuntu-latest
     environment:
-      name: Staging # Optional: Link to a GitHub Environment for better control
+      name: Staging
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # FIX: Set Execute Permissions for all scripts (resolves Permission denied error)
-      - name: Set Script Permissions
+      - name: Make scripts executable
         run: chmod +x scripts/*.sh
 
       - name: Deploy New Version to Staging-Green (Blue/Green Deployment)
@@ -58,14 +55,19 @@ jobs:
       - name: Run E2E Tests on Green Environment
         run: scripts/run-e2e-tests.sh
 
-      - name: Setup k6 for Performance Testing
-        uses: k6io/action@v2
+      # ----------------- Performance Testing using k6 -----------------
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
 
-      - name: Run Performance Tests on Green Environment (k6)
-        # PASSES the deployment URL to the runner script as $1
-        run: scripts/run-performance-tests.sh ${{ env.TEST_URL }}
+      - name: Run k6 Performance Tests on Green Environment
+        uses: grafana/run-k6-action@v1
+        with:
+          path: scripts/performance-test.js
+        env:
+          TEST_URL: ${{ env.TEST_URL }} # Must be full URL with protocol
 
-      - name: Run Vulnerability Scan (Security Features)
+      # ----------------- Security Scan -----------------
+      - name: Run Vulnerability Scan (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
@@ -73,31 +75,30 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
 
-      # --- Authorization Gate: Manual Approval ---
+      # ----------------- Manual Approval for Production -----------------
       - name: Manual Approval Gate for Production Cutover
         uses: trstringer/manual-approval@v1
         if: success()
         with:
           secret: ${{ github.TOKEN }}
-          approvers: 'your_github_username' # **CRITICAL: CHANGE THIS**
+          approvers: 'nilavan07' # Replace with your GitHub username
           minimum-approvals: 1
           issue-title: 'Production Deployment Approval: ${{ github.sha }}'
           issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
 
-  # --------------------------------------------------------------------------------
-  # JOB 3: Production Cutover (Final Deployment Step)
-  # --------------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # JOB 3: Production Cutover (Blue/Green Switch)
+  # ------------------------------------------------------------------------
   production_cutover:
     needs: staging_deployment
     runs-on: ubuntu-latest
-    environment: Production # Link to a GitHub Environment for better control/security
+    environment: Production
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # FIX: Set Execute Permissions for all scripts (resolves Permission denied error)
-      - name: Set Script Permissions
+      - name: Make scripts executable
         run: chmod +x scripts/*.sh
 
       - name: Switch Traffic (Blue/Green Cutover)
@@ -105,6 +106,7 @@ jobs:
 
       - name: Post-Switch Health Check and Telemetry Verification
         run: |
+          echo "Running health check on the live environment..."
           scripts/health-check.sh
           echo "Verifying continuous telemetry monitoring data flow..."
 
