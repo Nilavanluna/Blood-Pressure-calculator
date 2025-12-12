@@ -2,7 +2,6 @@ name: CD Pipeline - Deployment and Release
 
 on:
   workflow_run:
-    # IMPORTANT: Ensure "CI Pipeline - Build and Test" is the exact name of your CI workflow
     workflows: ['CI Pipeline - Build and Test']
     types:
       - completed
@@ -11,7 +10,6 @@ on:
 
 env:
   IMAGE_NAME: bp-calculator
-  # Get the Staging URL from repository secrets
   TEST_URL: ${{ secrets.STAGING_GREEN_URL }}
 
 jobs:
@@ -49,7 +47,7 @@ jobs:
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
-      # FIX: Use Bash to set lowercase owner name for GHCR (resolves "Unrecognized function: 'toLower'" error)
+      # FIX: Use Bash to set lowercase owner name for GHCR
       - name: Set Lowercase Repository Owner
         run: |
           LOWER_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
@@ -72,20 +70,20 @@ jobs:
       - name: Run Vulnerability Scan (Security Features)
         uses: aquasecurity/trivy-action@master
         with:
-          # References GHCR_OWNER set in the previous step
           image-ref: ghcr.io/${{ env.GHCR_OWNER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: 'table'
-          # Fail only on CRITICAL severity (HIGH severity should also be fixed long-term)
           severity: 'CRITICAL'
           exit-code: '1'
-          # FINAL FIX: Reference the .trivyignore file to suppress CVE-2023-45853
-          trivyignores: '.trivyignore'
+          trivyignores: '.trivyignore' # Requires a .trivyignore file in root
 
+      # FINAL FIX for k6 Action
       - name: Run Performance Tests on Green Environment (k6)
         uses: grafana/run-k6-action@v1
         with:
-          script: scripts/performance-test.js
-          environment-variables: K6_BASE_URL=${{ env.TEST_URL }}
+          # FIX: Use 'path' for the script location
+          path: scripts/performance-test.js
+          # FIX: Use 'flags' to pass environment variables using k6 --env syntax
+          flags: --env K6_BASE_URL=${{ env.TEST_URL }}
 
       # --- Authorization Gate: Manual Approval ---
       - name: Manual Approval Gate for Production Cutover
