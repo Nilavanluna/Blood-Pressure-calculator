@@ -23,6 +23,9 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
       - name: Deploy to QA Environment
         run: scripts/deploy-qa.sh
 
@@ -36,11 +39,14 @@ jobs:
     needs: qa_deployment
     runs-on: ubuntu-latest
     environment:
-      name: Staging # ❗ Environment approval rules handled in GitHub settings
+      name: Staging
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
 
       - name: Deploy New Version to Staging-Green (Blue/Green Deployment)
         run: scripts/deploy-green.sh
@@ -62,13 +68,12 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
 
-      # Manual approval before production deployment
       - name: Manual Approval Gate for Production Cutover
         uses: trstringer/manual-approval@v1
         if: success()
         with:
           secret: ${{ github.TOKEN }}
-          approvers: 'nilavan07' # ✔ Replace with your GitHub username
+          approvers: 'nilavan07'
           minimum-approvals: 1
           issue-title: 'Production Deployment Approval: ${{ github.sha }}'
           issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
@@ -84,6 +89,9 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
 
       - name: Switch Traffic (Blue/Green Cutover)
         run: scripts/switch-blue-green.sh
