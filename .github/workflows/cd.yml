@@ -9,40 +9,34 @@ on:
       - main
 
 env:
-  # Base name for the Docker image (pulled from a registry after CI)
   IMAGE_NAME: bp-calculator
-  # The environment URL used for E2E and Performance testing of the new version
   TEST_URL: ${{ secrets.STAGING_GREEN_URL }}
 
 jobs:
-  # --------------------------------------------------------------------------------
-  # JOB 1: QA Deployment (Release Management Strategy: QA)
-  # --------------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # JOB 1: QA Deployment
+  # ------------------------------------------------------------------------
   qa_deployment:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Deploy to QA Environment
-        # This script should pull the latest image from the registry and deploy it to the QA environment.
         run: scripts/deploy-qa.sh
 
       - name: Run Smoke Tests on QA
-        # Verify the basic functionality before proceeding.
         run: scripts/run-smoke-tests.sh
 
-  # --------------------------------------------------------------------------------
-  # JOB 2: Staging Deployment and Pre-Production Testing
-  # This serves as the Authorization Gate and is based on a Blue/Green Strategy.
-  # --------------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # JOB 2: Staging Deployment & Pre-Prod Testing (Blue/Green)
+  # ------------------------------------------------------------------------
   staging_deployment:
-    needs: qa_deployment # Only run if QA tests passed
+    needs: qa_deployment
     runs-on: ubuntu-latest
-    # Define an environment for security and to enable required reviewers/wait-for
     environment:
-      name: Staging
-      wait-on: true # Use this if you configure an environment for manual review
+      name: Staging # ❗ Environment approval rules handled in GitHub settings
 
     steps:
       - name: Checkout Code
@@ -57,50 +51,44 @@ jobs:
       - name: Setup k6 for Performance Testing
         uses: k6io/action@v2
 
-      - name: Run Performance Tests on Green Environment (k6)
+      - name: Run Performance Tests on Green Environment
         run: scripts/run-performance-tests.sh
 
-      - name: Run Vulnerability Scan (Security Features)
-        # Scan the built container image for known vulnerabilities (Simulated Pen Testing).
+      - name: Run Vulnerability Scan (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: 'table'
           exit-code: '1'
-          severity: 'CRITICAL,HIGH' # Fail the pipeline on critical or high severity issues.
+          severity: 'CRITICAL,HIGH'
 
-      # --- Authorization Gate: Manual Approval ---
+      # Manual approval before production deployment
       - name: Manual Approval Gate for Production Cutover
-        # This uses a custom action for an in-workflow approval before the next job starts.
-        # NOTE: For an officially supported GitHub environment gate, configure a Required Reviewer on the 'Production' environment.
         uses: trstringer/manual-approval@v1
-        if: success() # Only create the approval check if all previous steps succeeded
+        if: success()
         with:
           secret: ${{ github.TOKEN }}
-          approvers: 'your_github_username' # **CRITICAL: CHANGE THIS** to your GitHub username(s)
+          approvers: 'nilavan07' # ✔ Replace with your GitHub username
           minimum-approvals: 1
           issue-title: 'Production Deployment Approval: ${{ github.sha }}'
           issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
 
-  # --------------------------------------------------------------------------------
-  # JOB 3: Production Cutover (Final Deployment Step)
-  # Waits for the 'staging_deployment' job to complete AND be manually approved.
-  # --------------------------------------------------------------------------------
+  # ------------------------------------------------------------------------
+  # JOB 3: Production Cutover (Blue/Green Switch)
+  # ------------------------------------------------------------------------
   production_cutover:
     needs: staging_deployment
     runs-on: ubuntu-latest
-    environment: Production # Link to a GitHub Environment for better control/security
+    environment: Production
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Switch Traffic (Blue/Green Cutover)
-        # This single step redirects production traffic to the new Green environment.
         run: scripts/switch-blue-green.sh
 
       - name: Post-Switch Health Check and Telemetry Verification
-        # Verify the new live system is healthy after the switch.
         run: |
           echo "Running health check on the live environment..."
           scripts/health-check.sh
