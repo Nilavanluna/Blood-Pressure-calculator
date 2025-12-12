@@ -2,6 +2,7 @@ name: CD Pipeline - Deployment and Release
 
 on:
   workflow_run:
+    # IMPORTANT: Ensure "CI Pipeline - Build and Test" is the exact name of your CI workflow
     workflows: ['CI Pipeline']
     types:
       - completed
@@ -10,11 +11,12 @@ on:
 
 env:
   IMAGE_NAME: bp-calculator
+  # Get the Staging URL from repository secrets
   TEST_URL: ${{ secrets.STAGING_GREEN_URL }}
 
 jobs:
   # --------------------------------------------------------------------------------
-  # JOB 1: QA Deployment
+  # JOB 1: QA Deployment (Release Management Strategy: QA)
   # --------------------------------------------------------------------------------
   qa_deployment:
     runs-on: ubuntu-latest
@@ -22,7 +24,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # FIX: Set Execute Permissions for all scripts (resolves Permission denied error)
+      # FIX: Set Execute Permissions for all scripts
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
@@ -33,7 +35,7 @@ jobs:
         run: scripts/run-smoke-tests.sh
 
   # --------------------------------------------------------------------------------
-  # JOB 2: Staging Deployment and Pre-Production Testing
+  # JOB 2: Staging Deployment and Pre-Production Testing (Blue/Green Deployment Target)
   # --------------------------------------------------------------------------------
   staging_deployment:
     needs: qa_deployment
@@ -63,11 +65,13 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
 
-      # FIX: Using k6io/action@v2.0.0 to resolve the 'Unable to resolve action' error
+      # FIX: Updated action version to @v3 to resolve the "Unable to resolve action" error
+      # Also passes K6_BASE_URL environment variable directly (no separate runner script needed)
       - name: Run Performance Tests on Green Environment (k6)
-        uses: k6io/action@v2.0.0
+        uses: k6io/action@v3
         with:
           script: scripts/performance-test.js
+          # Maps the pipeline's TEST_URL to the k6 script's K6_BASE_URL variable
           environment-variables: K6_BASE_URL=${{ env.TEST_URL }}
 
       # --- Authorization Gate: Manual Approval ---
@@ -82,7 +86,7 @@ jobs:
           issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
 
   # --------------------------------------------------------------------------------
-  # JOB 3: Production Cutover
+  # JOB 3: Production Cutover (Final Deployment Step)
   # --------------------------------------------------------------------------------
   production_cutover:
     needs: staging_deployment
