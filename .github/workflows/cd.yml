@@ -13,13 +13,16 @@ env:
   TEST_URL: ${{ secrets.STAGING_GREEN_URL }}
 
 jobs:
+  # --------------------------------------------------------------------------------
+  # JOB 1: QA Deployment
+  # --------------------------------------------------------------------------------
   qa_deployment:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Set Execute Permissions for all scripts (needed for deploy-qa.sh, etc.)
+      # FIX: Set Execute Permissions for all scripts (resolves Permission denied error)
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
@@ -42,7 +45,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Set Execute Permissions for all scripts (needed for deploy-green.sh, etc.)
+      # FIX: Set Execute Permissions for all scripts
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
@@ -60,14 +63,11 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
 
-      # =========================================================================
-      # FIX: Run Performance Tests directly using the action and pass variables
-      # =========================================================================
+      # FIX: Using k6io/action@v2.0.0 to resolve the 'Unable to resolve action' error
       - name: Run Performance Tests on Green Environment (k6)
-        uses: k6io/action@v2
+        uses: k6io/action@v2.0.0
         with:
           script: scripts/performance-test.js
-          # This passes ${{ secrets.STAGING_GREEN_URL }} as K6_BASE_URL to the JS script
           environment-variables: K6_BASE_URL=${{ env.TEST_URL }}
 
       # --- Authorization Gate: Manual Approval ---
@@ -93,7 +93,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Set Execute Permissions for all scripts
+      # FIX: Set Execute Permissions for all scripts
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
