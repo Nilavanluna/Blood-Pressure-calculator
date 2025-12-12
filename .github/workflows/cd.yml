@@ -39,8 +39,6 @@ jobs:
   staging_deployment:
     needs: qa_deployment
     runs-on: ubuntu-latest
-
-    # Environment approval handled in GitHub settings
     environment:
       name: Staging
 
@@ -57,10 +55,10 @@ jobs:
       - name: Run E2E Tests on Green Environment
         run: scripts/run-e2e-tests.sh
 
-      - name: Run Performance Tests on Green Environment
-        run: |
-          chmod +x scripts/run-performance-tests.sh
-          TEST_URL=${{ env.TEST_URL }} ./scripts/run-performance-tests.sh
+      - name: Run Performance Tests on Green Environment (k6)
+        uses: grafana/k6-action@v1.1.0
+        with:
+          script: scripts/performance-test.js
         env:
           TEST_URL: ${{ env.TEST_URL }}
 
