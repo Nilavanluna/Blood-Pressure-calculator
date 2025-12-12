@@ -2,7 +2,6 @@ name: CD Pipeline - Deployment and Release
 
 on:
   workflow_run:
-    # IMPORTANT: Ensure "CI Pipeline - Build and Test" is the exact name of your CI workflow
     workflows: ['CI Pipeline']
     types:
       - completed
@@ -11,7 +10,6 @@ on:
 
 env:
   IMAGE_NAME: bp-calculator
-  # Get the Staging URL from repository secrets
   TEST_URL: ${{ secrets.STAGING_GREEN_URL }}
 
 jobs:
@@ -24,7 +22,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # FIX: Set Execute Permissions for all scripts
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
@@ -47,7 +44,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # FIX: Set Execute Permissions for all scripts
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
@@ -68,8 +64,8 @@ jobs:
       - name: Run Vulnerability Scan (Security Features)
         uses: aquasecurity/trivy-action@master
         with:
-          # FINAL FIX: Wrap image-ref in quotes to prevent Trivy parsing error
-          image-ref: 'ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ github.sha }}'
+          # CRITICAL FIX: Use toLower() on the repository owner to satisfy GHCR/Trivy's strict casing rules.
+          image-ref: ghcr.io/${{ toLower(github.repository_owner) }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: 'table'
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
@@ -104,7 +100,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # FIX: Set Execute Permissions for all scripts
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
