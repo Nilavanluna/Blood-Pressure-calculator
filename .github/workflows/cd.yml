@@ -2,6 +2,7 @@ name: CD Pipeline - Deployment and Release
 
 on:
   workflow_run:
+    # IMPORTANT: Ensure "CI Pipeline - Build and Test" is the exact name of your CI workflow
     workflows: ['CI Pipeline']
     types:
       - completed
@@ -10,6 +11,7 @@ on:
 
 env:
   IMAGE_NAME: bp-calculator
+  # Get the Staging URL from repository secrets
   TEST_URL: ${{ secrets.STAGING_GREEN_URL }}
 
 jobs:
@@ -22,6 +24,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # FIX: Set Execute Permissions for all scripts
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
@@ -44,8 +47,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # FIX: Set Execute Permissions for all scripts
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
+
+      # NEW STEP: Convert the repository owner name to lowercase and set it as an env var.
+      # This resolves the 'Unrecognized function: toLower' error.
+      - name: Set Lowercase Repository Owner
+        run: echo "GHCR_OWNER=${{ toLower(github.repository_owner) }}" >> $GITHUB_ENV
 
       - name: Deploy New Version to Staging-Green (Blue/Green Deployment)
         run: scripts/deploy-green.sh
@@ -64,8 +73,8 @@ jobs:
       - name: Run Vulnerability Scan (Security Features)
         uses: aquasecurity/trivy-action@master
         with:
-          # CRITICAL FIX: Use toLower() on the repository owner to satisfy GHCR/Trivy's strict casing rules.
-          image-ref: ghcr.io/${{ toLower(github.repository_owner) }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          # FIX: Reference the newly created lowercase environment variable (GHCR_OWNER)
+          image-ref: ghcr.io/${{ env.GHCR_OWNER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: 'table'
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
