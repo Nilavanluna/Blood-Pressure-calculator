@@ -82,13 +82,14 @@ jobs:
           exit-code: '1'
           trivyignores: '.trivyignore'
 
-      # DAST Scan (OWASP ZAP) - FIX APPLIED
+      # DAST Scan (OWASP ZAP) - FINAL FIXES APPLIED
       - name: Run DAST Scan (OWASP ZAP Baseline)
         uses: zaproxy/action-baseline@v0.12.0
         with:
-          target: https://${{ env.TEST_URL }} # FIX: Protocol added
+          target: https://${{ env.TEST_URL }} # FIX 1: Protocol added
+          user: ${{ github.actor }} # FIX 2: User added to solve Permission Denied
           fail_action: true
-          # REMOVED: exclude_hosts parameter
+          cmd_options: '-a'
 
       # --- Authorization Gate: Manual Approval ---
       - name: Manual Approval Gate for Production Cutover
