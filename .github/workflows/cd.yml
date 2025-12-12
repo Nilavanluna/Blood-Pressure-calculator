@@ -10,7 +10,6 @@ on:
 
 env:
   IMAGE_NAME: bp-calculator
-  TEST_URL: ${{ secrets.STAGING_GREEN_URL }}
 
 jobs:
   # --------------------------------------------------------------------------------
@@ -79,11 +78,20 @@ jobs:
           trivyignores: .trivyignore
 
       # ------------------------------------------
-      # OWASP ZAP DAST Scan — Fail only on HIGH/CRITICAL
+      # OWASP ZAP DAST Scan — Render Dynamic URL
       # ------------------------------------------
       - name: Run DAST Scan (OWASP ZAP Baseline)
         run: |
-          TARGET_URL="${{ env.TEST_URL }}"
+          SERVICE_ID="${{ secrets.RENDER_GREEN_SERVICE_ID }}"
+          RENDER_API_KEY="${{ secrets.RENDER_API_KEY }}"
+
+          TARGET_URL=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
+            "https://api.render.com/v1/services/$SERVICE_ID" | jq -r '.serviceDetails.url')
+
+          if [ -z "$TARGET_URL" ] || [ "$TARGET_URL" == "null" ]; then
+            echo "Error: Could not fetch TARGET_URL from Render. Check your service ID and API key."
+            exit 1
+          fi
 
           # Add https:// if missing
           if ! [[ "$TARGET_URL" =~ ^https?:// ]]; then
