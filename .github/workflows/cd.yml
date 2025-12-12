@@ -16,7 +16,7 @@ env:
 
 jobs:
   # --------------------------------------------------------------------------------
-  # JOB 1: QA Deployment (Release Management Strategy: QA)
+  # JOB 1: QA Deployment
   # --------------------------------------------------------------------------------
   qa_deployment:
     runs-on: ubuntu-latest
@@ -35,7 +35,7 @@ jobs:
         run: scripts/run-smoke-tests.sh
 
   # --------------------------------------------------------------------------------
-  # JOB 2: Staging Deployment and Pre-Production Testing (Blue/Green Deployment Target)
+  # JOB 2: Staging Deployment and Pre-Production Testing
   # --------------------------------------------------------------------------------
   staging_deployment:
     needs: qa_deployment
@@ -65,10 +65,9 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
 
-      # FIX: Updated action version to @v3 to resolve the "Unable to resolve action" error
-      # Also passes K6_BASE_URL environment variable directly (no separate runner script needed)
+      # FINAL FIX: Using k6io/action@master to resolve the "Unable to resolve action" error
       - name: Run Performance Tests on Green Environment (k6)
-        uses: k6io/action@v3
+        uses: k6io/action@master
         with:
           script: scripts/performance-test.js
           # Maps the pipeline's TEST_URL to the k6 script's K6_BASE_URL variable
@@ -86,7 +85,7 @@ jobs:
           issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
 
   # --------------------------------------------------------------------------------
-  # JOB 3: Production Cutover (Final Deployment Step)
+  # JOB 3: Production Cutover
   # --------------------------------------------------------------------------------
   production_cutover:
     needs: staging_deployment
