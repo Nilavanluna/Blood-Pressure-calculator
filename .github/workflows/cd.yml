@@ -42,7 +42,6 @@ jobs:
       name: Staging
 
     # CRITICAL FIX: Explicitly grant permissions for the token to create issues
-    # This solves the 403 error for the manual approval gate.
     permissions:
       issues: write
       pull-requests: write
@@ -74,16 +73,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Vulnerability Scan (Security Features)
+      - name: Run Vulnerability Scan (Container/Dependency Scanning - Trivy)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ghcr.io/${{ env.GHCR_OWNER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: 'table'
           severity: 'CRITICAL'
           exit-code: '1'
-          trivyignores: '.trivyignore' # This assumes you have committed a .trivyignore file
+          trivyignores: '.trivyignore'
 
-      # The Performance Tests step has been removed as requested.
+      # NEW STEP: Dynamic Application Security Testing (DAST/Pen-Testing - OWASP ZAP)
+      # This addresses the missing penetration testing requirement.
+      - name: Run DAST Scan (OWASP ZAP Baseline)
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: ${{ env.TEST_URL }}
+          # Set minimum severity threshold to fail the build
+          fail_action: true
+          # Exclude common false positives if known (optional but helpful)
+          # Excludes all URLs that aren't the primary target.
+          exclude_hosts: '.*.github.com'
 
       # --- Authorization Gate: Manual Approval ---
       - name: Manual Approval Gate for Production Cutover
@@ -91,7 +100,7 @@ jobs:
         if: success()
         with:
           secret: ${{ github.TOKEN }}
-          approvers: 'Nilavanluna' # Your confirmed username
+          approvers: 'Nilavanluna'
           minimum-approvals: 1
           issue-title: 'Production Deployment Approval: ${{ github.sha }}'
           issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
