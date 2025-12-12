@@ -84,7 +84,7 @@ jobs:
           trivyignores: .trivyignore
 
       # ------------------------------------------
-      # OWASP ZAP DAST SCAN — FIXED VERSION
+      # OWASP ZAP DAST SCAN — FIXED + ARTIFACTS
       # ------------------------------------------
       - name: Run DAST Scan (OWASP ZAP Baseline)
         run: |
@@ -103,12 +103,23 @@ jobs:
             --user "$(id -u):$(id -g)" \
             --network host \
             -t ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t "$TARGET_URL" \
-            -J report_json.json \
-            -w report_md.md \
-            -r report_html.html \
+            zap-baseline.py \
+            -t "$TARGET_URL" \
+            -J /zap/wrk/report_json.json \
+            -w /zap/wrk/report_md.md \
+            -r /zap/wrk/report_html.html \
             -a -I \
             || (echo "ZAP Baseline Scan found issues." && exit 1)
+
+      # Upload ZAP reports as GitHub artifacts
+      - name: Upload ZAP Reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: zap-reports
+          path: |
+            report_json.json
+            report_md.md
+            report_html.html
 
       # Manual Approval Before Production Switch
       - name: Manual Approval Gate for Production Cutover
