@@ -27,7 +27,7 @@ jobs:
       - name: Set Lowercase Repository Owner for GHCR
         id: set_owner
         run: |
-          LOWER_OWNER="${{ github.repository_owner,, }}"
+          LOWER_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           echo "GHCR_OWNER=$LOWER_OWNER" >> $GITHUB_ENV
 
       # Setup .NET
