@@ -2,16 +2,15 @@ name: CD Pipeline - Deployment and Release
 
 on:
   workflow_run:
-    # IMPORTANT: Ensure this matches the exact name of your CI workflow
-    workflows: ["CI Pipeline - Build and Test"] 
-    types: 
+    workflows: ['CI Pipeline - Build and Test']
+    types:
       - completed
     branches:
-      - main 
+      - main
 
 env:
   IMAGE_NAME: bp-calculator
-  TEST_URL: ${{ secrets.STAGING_GREEN_URL }} 
+  TEST_URL: ${{ secrets.STAGING_GREEN_URL }}
 
 jobs:
   # --------------------------------------------------------------------------------
@@ -38,10 +37,9 @@ jobs:
   staging_deployment:
     needs: qa_deployment
     runs-on: ubuntu-latest
-    environment: 
+    environment:
       name: Staging
-    
-    # CRITICAL FIX: Explicitly grant permissions for the token to create issues
+
     permissions:
       issues: write
       pull-requests: write
@@ -49,11 +47,10 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        
+
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
-      # FIX: Use Bash to set lowercase owner name for GHCR
       - name: Set Lowercase Repository Owner
         run: |
           LOWER_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
@@ -65,42 +62,47 @@ jobs:
       - name: Run E2E Tests on Green Environment
         run: scripts/run-e2e-tests.sh
 
-      # Login to Container Registry to pull image for scanning
       - name: Log in to GitHub Container Registry (GHCR)
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Run Vulnerability Scan (Container/Dependency Scanning - Trivy)
+
+      - name: Run Vulnerability Scan (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ghcr.io/${{ env.GHCR_OWNER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          format: 'table'
-          severity: 'CRITICAL' 
-          exit-code: '1'
-          trivyignores: '.trivyignore' 
+          format: table
+          severity: CRITICAL
+          exit-code: 1
+          trivyignores: .trivyignore
 
-      # DAST Scan (OWASP ZAP) - FINAL, MANUAL DOCKER FIX (Single-line)
       - name: Run DAST Scan (OWASP ZAP Baseline)
         run: |
-          /usr/bin/docker run -v ${{ github.workspace }}:/zap/wrk/:rw -w /zap/wrk --user "$(id -u):$(id -g)" --network host -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t https://${{ env.TEST_URL }} -J report_json.json -w report_md.md -r report_html.html -a -I || (echo "ZAP Baseline Scan found issues, check logs for details." && exit 1)
+          /usr/bin/docker run \
+            -v ${{ github.workspace }}:/zap/wrk/:rw \
+            -w /zap/wrk \
+            --user "$(id -u):$(id -g)" \
+            --network host \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t ${{ env.TEST_URL }} \
+            -J report_json.json -w report_md.md -r report_html.html -a -I \
+            || (echo "ZAP Baseline Scan found issues." && exit 1)
 
-      # --- Authorization Gate: Manual Approval ---
       - name: Manual Approval Gate for Production Cutover
         uses: trstringer/manual-approval@v1
         if: success()
         with:
-          secret: ${{ github.TOKEN }}
+          secret: ${{ secrets.GITHUB_TOKEN }}
           approvers: 'Nilavanluna'
           minimum-approvals: 1
-          issue-title: "Production Deployment Approval: ${{ github.sha }}"
-          issue-body: "Approve deployment to production by switching Blue/Green traffic."
+          issue-title: 'Production Deployment Approval: ${{ github.sha }}'
+          issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
 
   # --------------------------------------------------------------------------------
   # JOB 3: Production Cutover
-  --------------------------------------------------------------------------------
+  # --------------------------------------------------------------------------------
   production_cutover:
     needs: staging_deployment
     runs-on: ubuntu-latest
@@ -109,17 +111,17 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        
+
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
-        
+
       - name: Switch Traffic (Blue/Green Cutover)
         run: scripts/switch-blue-green.sh
-        
+
       - name: Post-Switch Health Check and Telemetry Verification
         run: |
           scripts/health-check.sh
           echo "Verifying continuous telemetry monitoring data flow..."
-          
+
       - name: Run Post-Deployment Smoke Tests on Production
         run: scripts/run-post-deploy-tests.sh
