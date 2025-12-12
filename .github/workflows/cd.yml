@@ -1,67 +1,110 @@
-name: CD Pipeline
+name: CD Pipeline - Deployment and Release
 
+# --------------------------------------------------------------------------------
+# 1. Pipeline Trigger
+# Trigger this CD pipeline only after the CI pipeline completes successfully on the main branch.
+# ASSUMPTION: The CI workflow is named "CI Pipeline - Build and Test".
+# --------------------------------------------------------------------------------
 on:
-  push:
+  workflow_run:
+    workflows: ["CI Pipeline - Build and Test"] 
+    types: 
+      - completed
     branches:
-      - main
+      - main 
+
+env:
+  # Base name for the Docker image (pulled from a registry after CI)
+  IMAGE_NAME: bp-calculator
+  # The environment URL used for E2E and Performance testing of the new version
+  TEST_URL: ${{ secrets.STAGING_GREEN_URL }} 
 
 jobs:
-  # 1. QA and Staging Deploy (Unchanged)
-  qa_staging_deploy:
+  # --------------------------------------------------------------------------------
+  # JOB 1: QA Deployment
+  # A fast, non-critical deployment environment for quick checks.
+  # --------------------------------------------------------------------------------
+  qa_deployment:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Make scripts executable
-        run: chmod +x ./scripts/*.sh
+      - [cite_start]name: Deploy to QA Environment (Release Management Strategy: QA) [cite: 27]
+        # This script should pull the latest image from the registry and deploy it to QA_URL.
+        run: scripts/deploy-qa.sh
 
-      - name: Deploy to QA
-        run: bash ./scripts/deploy-qa.sh
+      - name: Run Smoke Tests on QA
+        # Verify the basic functionality before proceeding.
+        run: scripts/run-smoke-tests.sh
 
-      - name: Run Smoke Tests
-        run: bash ./scripts/run-smoke-tests.sh
-
-      - name: Deploy to Staging
-        run: bash ./scripts/deploy-staging.sh
-
-      - name: Run E2E Tests
-        run: bash ./scripts/run-e2e-tests.sh
-
-  # 2. The Manual Approval Gate
-  approval_gate:
+  # --------------------------------------------------------------------------------
+  # JOB 2: Staging Deployment and Pre-Production Testing
+  # Deploy to the 'Green' (non-live) environment for full verification.
+  # --------------------------------------------------------------------------------
+  staging_deployment:
+    needs: qa_deployment # Only run if QA tests passed
     runs-on: ubuntu-latest
-    needs: [qa_staging_deploy] # MUST complete the previous job first
-
-    # 🌟 THIS IS THE CORRECT PLACE FOR THE ENVIRONMENT KEYWORD 🌟
-    environment:
-      name: production # This triggers the manual review set up in step 1
-
     steps:
-      - name: Approval Step Placeholder
-        run: echo "Waiting for manual approval to deploy to production..."
-        # This step simply runs while the gate holds the job.
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-  # 3. Production Deployment (Blue/Green)
-  production_deploy:
-    runs-on: ubuntu-latest
-    needs: [approval_gate] # MUST wait for the approval job to complete
+      # --- Deployment Strategy: Deploy to Green Environment ---
+      - [cite_start]name: Deploy New Version to Staging-Green (Blue/Green Deployment) [cite: 27]
+        # The 'Green' environment is the non-live version used for testing.
+        run: scripts/deploy-green.sh
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      # --- Extensive Pre-Production Testing ---
+      - [cite_start]name: Run E2E Tests on Green Environment [cite: 28]
+        # E2E tests target the non-live endpoint using the provided environment variable.
+        run: scripts/run-e2e-tests.sh
 
-      - name: Make scripts executable
-        run: chmod +x ./scripts/*.sh
+      - name: Setup k6 for Performance Testing
+        uses: k6io/action@v2 
 
-      - name: Deploy to Green (Production)
-        run: bash ./scripts/deploy-green.sh
+      - [cite_start]name: Run Performance Tests on Green Environment (k6) [cite: 29]
+        # Execute the k6 runner script against the dedicated test URL.
+        run: scripts/run-performance-tests.sh
 
-      - name: Blue-Green Switch
-        run: bash ./scripts/switch-blue-green.sh
+      # --- Security Task: Container Image Scanning (Pen Testing Equivalent) ---
+      - [cite_start]name: Run Vulnerability Scan (Security Features) [cite: 30, 33]
+        # Scan the built container image for known vulnerabilities.
+        # ASSUMPTION: The image tag is available as the git SHA.
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }} 
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH' # Fail the pipeline on critical or high severity issues.
 
-      - name: Post-Deploy Tests
-        run: bash ./scripts/run-post-deploy-tests.sh
+      # --- Authorization Gate: Manual Approval ---
+      - [cite_start]name: Manual Approval Gate for Production Cutover [cite: 32]
+        # Requires a designated user to manually approve the switch before traffic is redirected.
+        # NOTE: This step must be run on a workflow configured with GitHub Environments for full security.
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: 'your_github_username' # **CHANGE THIS** to your GitHub username(s)
+          minimum-approvals: 1
+          issue-title: "Production Deployment Approval: ${{ github.sha }}"
+          issue-body: "Approve deployment to production by switching Blue/Green traffic."
+          
+      # --------------------------------------------------------------------------------
+      # JOB 3: Production Cutover (Final Deployment Step)
+      # Switch the traffic to the tested 'Green' environment.
+      # --------------------------------------------------------------------------------
+      - [cite_start]name: Switch Traffic (Blue/Green Cutover) [cite: 27]
+        # This is the single, instantaneous step that redirects production traffic to the new Green environment.
+        run: scripts/switch-blue-green.sh
+        
+      - [cite_start]name: Post-Switch Health Check and Telemetry Verification [cite: 31]
+        # Verify the new live system is healthy.
+        run: |
+          echo "Running health check on the live environment..."
+          scripts/health-check.sh
+          echo "Verifying continuous telemetry monitoring data flow..."
+          # A real step here would use an API call to a monitoring tool (e.g., Azure Application Insights) 
+          # to ensure data points are being received from the new deployment.
 
-      - name: Health Check
-        run: bash ./scripts/health-check.sh
+      - name: Run Post-Deployment Smoke Tests on Production
+        run: scripts/run-post-deploy-tests.sh
