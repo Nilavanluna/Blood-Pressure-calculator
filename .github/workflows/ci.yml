@@ -7,8 +7,6 @@ on:
     branches: [main, develop]
 
 env:
-  # CRITICAL FIX: Only define simple, non-referential variables here.
-  # The complex FULL_IMAGE_NAME definition must be moved to the step.
   IMAGE_NAME: bp-calculator
   REGISTRY: ghcr.io
 
@@ -17,11 +15,21 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # Necessary permission to push the image to GHCR
+      packages: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      # FINAL FIX: Set the lowercase owner name using standard Bash parameter expansion
+      - name: Set Lowercase Repository Owner for GHCR
+        id: set_owner
+        run: |
+          # Get the mixed-case owner name
+          MIXED_CASE_OWNER="${{ github.repository_owner }}"
+          # Convert to lowercase using Bash parameter expansion and set to GITHUB_OUTPUT
+          LOWER_OWNER="${MIXED_CASE_OWNER,,}"
+          echo "GHCR_OWNER=$LOWER_OWNER" >> $GITHUB_ENV
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
@@ -59,7 +67,6 @@ jobs:
         with:
           context: .
           push: true
-          # FINAL FIX: Build the complex tag string here using the ${{ ... }} expression.
-          # toLower() is valid in this context, and env variables are referenced correctly.
-          tags: ${{ env.REGISTRY }}/${{ toLower(github.repository_owner) }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          # Reference the environment variable (GHCR_OWNER) set in the first step
+          tags: ${{ env.REGISTRY }}/${{ env.GHCR_OWNER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           file: ./Dockerfile
