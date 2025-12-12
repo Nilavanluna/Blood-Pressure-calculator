@@ -61,7 +61,10 @@ jobs:
         uses: k6io/action@v0.3.0
 
       - name: Run Performance Tests on Green Environment (k6)
-        run: scripts/run-performance-tests.sh
+        uses: k6io/action@v0.3.0
+        with:
+          filename: scripts/run-performance-tests.js
+          env: TEST_URL=${{ env.TEST_URL }}
 
       - name: Run Vulnerability Scan (Trivy)
         uses: aquasecurity/trivy-action@master
