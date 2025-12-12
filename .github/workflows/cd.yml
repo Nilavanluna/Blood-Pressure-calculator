@@ -65,9 +65,9 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
 
-      # FINAL FIX: Using k6io/action@master to resolve the "Unable to resolve action" error
+      # FINAL FIX: Using grafana/run-k6-action@v1 based on your initial logs
       - name: Run Performance Tests on Green Environment (k6)
-        uses: k6io/action@master
+        uses: grafana/run-k6-action@v1
         with:
           script: scripts/performance-test.js
           # Maps the pipeline's TEST_URL to the k6 script's K6_BASE_URL variable
