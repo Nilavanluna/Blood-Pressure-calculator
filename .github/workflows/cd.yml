@@ -3,7 +3,7 @@ name: CD Pipeline - Deployment and Release
 on:
   workflow_run:
     # IMPORTANT: Ensure "CI Pipeline - Build and Test" is the exact name of your CI workflow
-    workflows: ['CI Pipeline']
+    workflows: ['CI Pipeline - Build and Test']
     types:
       - completed
     branches:

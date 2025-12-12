@@ -1,4 +1,4 @@
-name: CI Pipeline
+name: CI Pipeline - Build and Test
 
 on:
   push:
@@ -6,9 +6,21 @@ on:
   pull_request:
     branches: [main, develop]
 
+env:
+  # Define the base name for the Docker image
+  IMAGE_NAME: bp-calculator
+  # Define the full path for the Docker image, ensuring lowercase repository owner for GHCR
+  # This uses the same logic as the fix we applied to the CD file.
+  REGISTRY: ghcr.io
+  FULL_IMAGE_NAME: ${{ env.REGISTRY }}/${{ toLower(github.repository_owner) }}/${{ env.IMAGE_NAME }}
+  IMAGE_TAG: ${{ github.sha }}
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # Necessary permission to push the image to GHCR
 
     steps:
       - name: Checkout code
@@ -31,7 +43,26 @@ jobs:
       - name: Check code analysis
         run: |
           echo "Code analysis check would go here"
-          echo "You can integrate SonarQube or CodeQL here"
 
-      - name: Security scan
+      - name: Security scan (Check package vulnerabilities)
         run: dotnet list package --vulnerable
+
+      # ====================================================================
+      # FIX: Docker Build and Push Steps
+      # ====================================================================
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # Use GITHUB_TOKEN to authenticate push to GHCR
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Docker Image to GHCR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.FULL_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          # Assuming you have a standard Dockerfile in the repository root
+          file: ./Dockerfile
