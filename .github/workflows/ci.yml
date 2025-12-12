@@ -1,4 +1,4 @@
-name: CI Pipeline - Build and Test
+name: CI Pipeline - Build, Test, SonarCloud & Docker
 
 on:
   push:
@@ -19,42 +19,53 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # FINAL FIX: Set the lowercase owner name using standard Bash parameter expansion
+      # Set lowercase owner for GHCR
       - name: Set Lowercase Repository Owner for GHCR
         id: set_owner
         run: |
-          # Get the mixed-case owner name
-          MIXED_CASE_OWNER="${{ github.repository_owner }}"
-          # Convert to lowercase using Bash parameter expansion and set to GITHUB_OUTPUT
-          LOWER_OWNER="${MIXED_CASE_OWNER,,}"
+          LOWER_OWNER="${{ github.repository_owner,, }}"
           echo "GHCR_OWNER=$LOWER_OWNER" >> $GITHUB_ENV
 
+      # Setup .NET
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '9.0.x'
 
+      # Restore dependencies
       - name: Restore dependencies
         run: dotnet restore
 
+      # SonarCloud analysis start
+      - name: SonarCloud Begin Analysis
+        uses: SonarSource/sonarcloud-github-action@v2
+        with:
+          args: >
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+            -Dsonar.projectKey=bp-calculator
+            -Dsonar.organization=your-org
+
+      # Build the app
       - name: Build application
-        run: dotnet build --no-restore
+        run: dotnet build --no-restore --configuration Release
 
-      - name: Run unit tests
-        run: dotnet test BPCalculator.Tests/BPCalculator.Tests.csproj --no-build --verbosity normal
+      # Run tests
+      - name: Run Unit Tests
+        run: dotnet test BPCalculator.Tests/BPCalculator.Tests.csproj --no-build --configuration Release --verbosity normal
 
-      - name: Check code analysis
-        run: |
-          echo "Code analysis check would go here"
+      # SonarCloud analysis end
+      - name: SonarCloud End Analysis
+        run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
 
+      # Security scan for vulnerable packages
       - name: Security scan (Check package vulnerabilities)
         run: dotnet list package --vulnerable
 
-      # ====================================================================
-      # Docker Build and Push Steps
-      # ====================================================================
+      # Docker Build and Push
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -67,6 +78,5 @@ jobs:
         with:
           context: .
           push: true
-          # Reference the environment variable (GHCR_OWNER) set in the first step
           tags: ${{ env.REGISTRY }}/${{ env.GHCR_OWNER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           file: ./Dockerfile
