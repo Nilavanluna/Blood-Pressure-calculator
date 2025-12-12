@@ -7,24 +7,20 @@ on:
       - completed
     branches:
       - main
-  workflow_dispatch: # Allows manual trigger of the CD pipeline
 
 env:
   IMAGE_NAME: bp-calculator
-  TEST_URL: ${{ secrets.STAGING_GREEN_URL }} # Must be full URL: https://staging.example.com
+  TEST_URL: ${{ secrets.STAGING_GREEN_URL }}
 
 jobs:
-  # ------------------------------------------------------------------------
-  # JOB 1: QA Deployment
-  # ------------------------------------------------------------------------
   qa_deployment:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Make scripts executable
+      # Set Execute Permissions for all scripts (needed for deploy-qa.sh, etc.)
+      - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
       - name: Deploy to QA Environment
@@ -33,9 +29,9 @@ jobs:
       - name: Run Smoke Tests on QA
         run: scripts/run-smoke-tests.sh
 
-  # ------------------------------------------------------------------------
-  # JOB 2: Staging Deployment & Pre-Production Testing (Blue/Green)
-  # ------------------------------------------------------------------------
+  # --------------------------------------------------------------------------------
+  # JOB 2: Staging Deployment and Pre-Production Testing
+  # --------------------------------------------------------------------------------
   staging_deployment:
     needs: qa_deployment
     runs-on: ubuntu-latest
@@ -46,7 +42,8 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Make scripts executable
+      # Set Execute Permissions for all scripts (needed for deploy-green.sh, etc.)
+      - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
       - name: Deploy New Version to Staging-Green (Blue/Green Deployment)
@@ -55,19 +52,7 @@ jobs:
       - name: Run E2E Tests on Green Environment
         run: scripts/run-e2e-tests.sh
 
-      # ----------------- Performance Testing using k6 -----------------
-      - name: Setup k6
-        uses: grafana/setup-k6-action@v1
-
-      - name: Run k6 Performance Tests on Green Environment
-        uses: grafana/run-k6-action@v1
-        with:
-          path: scripts/performance-test.js
-        env:
-          TEST_URL: ${{ env.TEST_URL }} # Must be full URL with protocol
-
-      # ----------------- Security Scan -----------------
-      - name: Run Vulnerability Scan (Trivy)
+      - name: Run Vulnerability Scan (Security Features)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
@@ -75,20 +60,30 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
 
-      # ----------------- Manual Approval for Production -----------------
+      # =========================================================================
+      # FIX: Run Performance Tests directly using the action and pass variables
+      # =========================================================================
+      - name: Run Performance Tests on Green Environment (k6)
+        uses: k6io/action@v2
+        with:
+          script: scripts/performance-test.js
+          # This passes ${{ secrets.STAGING_GREEN_URL }} as K6_BASE_URL to the JS script
+          environment-variables: K6_BASE_URL=${{ env.TEST_URL }}
+
+      # --- Authorization Gate: Manual Approval ---
       - name: Manual Approval Gate for Production Cutover
         uses: trstringer/manual-approval@v1
         if: success()
         with:
           secret: ${{ github.TOKEN }}
-          approvers: 'nilavan07' # Replace with your GitHub username
+          approvers: 'your_github_username' # **CRITICAL: CHANGE THIS**
           minimum-approvals: 1
           issue-title: 'Production Deployment Approval: ${{ github.sha }}'
           issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
 
-  # ------------------------------------------------------------------------
-  # JOB 3: Production Cutover (Blue/Green Switch)
-  # ------------------------------------------------------------------------
+  # --------------------------------------------------------------------------------
+  # JOB 3: Production Cutover
+  # --------------------------------------------------------------------------------
   production_cutover:
     needs: staging_deployment
     runs-on: ubuntu-latest
@@ -98,7 +93,8 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Make scripts executable
+      # Set Execute Permissions for all scripts
+      - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
       - name: Switch Traffic (Blue/Green Cutover)
@@ -106,7 +102,6 @@ jobs:
 
       - name: Post-Switch Health Check and Telemetry Verification
         run: |
-          echo "Running health check on the live environment..."
           scripts/health-check.sh
           echo "Verifying continuous telemetry monitoring data flow..."
 
