@@ -56,7 +56,7 @@ jobs:
         run: scripts/run-e2e-tests.sh
 
       - name: Run Performance Tests on Green Environment (k6)
-        uses: grafana/k6-action@v1.1.0
+        uses: grafana/k6-action@v0.1.3
         with:
           script: scripts/performance-test.js
         env:
@@ -76,7 +76,7 @@ jobs:
         if: success()
         with:
           secret: ${{ github.TOKEN }}
-          approvers: 'nilavan07'
+          approvers: 'nilavanluna'
           minimum-approvals: 1
           issue-title: 'Production Deployment Approval: ${{ github.sha }}'
           issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
