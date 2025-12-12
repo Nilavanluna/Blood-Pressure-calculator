@@ -32,7 +32,7 @@ jobs:
         run: scripts/run-smoke-tests.sh
 
   # --------------------------------------------------------------------------------
-  # JOB 2: Staging Deployment and Pre-Production Testing
+  # JOB 2: Staging Deployment + Security Testing
   # --------------------------------------------------------------------------------
   staging_deployment:
     needs: qa_deployment
@@ -51,6 +51,7 @@ jobs:
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
+      # Lowercase owner for GHCR
       - name: Set Lowercase Repository Owner
         run: |
           LOWER_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
@@ -62,6 +63,7 @@ jobs:
       - name: Run E2E Tests on Green Environment
         run: scripts/run-e2e-tests.sh
 
+      # Login for container scanning
       - name: Log in to GitHub Container Registry (GHCR)
         uses: docker/login-action@v3
         with:
@@ -69,6 +71,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # ------------------------------------------
+      # TRIVY CONTAINER SCAN
+      # ------------------------------------------
       - name: Run Vulnerability Scan (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
@@ -78,18 +83,34 @@ jobs:
           exit-code: 1
           trivyignores: .trivyignore
 
+      # ------------------------------------------
+      # OWASP ZAP DAST SCAN — FIXED VERSION
+      # ------------------------------------------
       - name: Run DAST Scan (OWASP ZAP Baseline)
         run: |
+          TARGET_URL="${{ env.TEST_URL }}"
+
+          # If URL missing http/https, add https://
+          if ! [[ "$TARGET_URL" =~ ^https?:// ]]; then
+            TARGET_URL="https://$TARGET_URL"
+          fi
+
+          echo "ZAP scanning target: $TARGET_URL"
+
           /usr/bin/docker run \
             -v ${{ github.workspace }}:/zap/wrk/:rw \
             -w /zap/wrk \
             --user "$(id -u):$(id -g)" \
             --network host \
             -t ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t ${{ env.TEST_URL }} \
-            -J report_json.json -w report_md.md -r report_html.html -a -I \
+            zap-baseline.py -t "$TARGET_URL" \
+            -J report_json.json \
+            -w report_md.md \
+            -r report_html.html \
+            -a -I \
             || (echo "ZAP Baseline Scan found issues." && exit 1)
 
+      # Manual Approval Before Production Switch
       - name: Manual Approval Gate for Production Cutover
         uses: trstringer/manual-approval@v1
         if: success()
@@ -98,7 +119,7 @@ jobs:
           approvers: 'Nilavanluna'
           minimum-approvals: 1
           issue-title: 'Production Deployment Approval: ${{ github.sha }}'
-          issue-body: 'Approve deployment to production by switching Blue/Green traffic.'
+          issue-body: 'Approve production deployment (Blue/Green switch).'
 
   # --------------------------------------------------------------------------------
   # JOB 3: Production Cutover
@@ -121,7 +142,7 @@ jobs:
       - name: Post-Switch Health Check and Telemetry Verification
         run: |
           scripts/health-check.sh
-          echo "Verifying continuous telemetry monitoring data flow..."
+          echo "Telemetry: OK"
 
       - name: Run Post-Deployment Smoke Tests on Production
         run: scripts/run-post-deploy-tests.sh
