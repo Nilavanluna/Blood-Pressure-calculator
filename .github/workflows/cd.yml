@@ -6,18 +6,15 @@ on:
       - main
 
 jobs:
-  deploy:
+  # 1. QA and Staging Deploy (Unchanged)
+  qa_staging_deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Make scripts executable
         run: chmod +x ./scripts/*.sh
-
-      - name: Debug scripts folder
-        run: ls -la ./scripts
 
       - name: Deploy to QA
         run: bash ./scripts/deploy-qa.sh
@@ -31,11 +28,31 @@ jobs:
       - name: Run E2E Tests
         run: bash ./scripts/run-e2e-tests.sh
 
-      # REAL MANUAL APPROVAL GATE
-      - name: Wait for Production Approval
-        environment:
-          name: production
-        run: echo "Approved for production deployment"
+  # 2. The Manual Approval Gate
+  approval_gate:
+    runs-on: ubuntu-latest
+    needs: [qa_staging_deploy] # MUST complete the previous job first
+
+    # 🌟 THIS IS THE CORRECT PLACE FOR THE ENVIRONMENT KEYWORD 🌟
+    environment:
+      name: production # This triggers the manual review set up in step 1
+
+    steps:
+      - name: Approval Step Placeholder
+        run: echo "Waiting for manual approval to deploy to production..."
+        # This step simply runs while the gate holds the job.
+
+  # 3. Production Deployment (Blue/Green)
+  production_deploy:
+    runs-on: ubuntu-latest
+    needs: [approval_gate] # MUST wait for the approval job to complete
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Make scripts executable
+        run: chmod +x ./scripts/*.sh
 
       - name: Deploy to Green (Production)
         run: bash ./scripts/deploy-green.sh
