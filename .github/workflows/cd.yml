@@ -79,39 +79,43 @@ jobs:
           trivyignores: .trivyignore
 
       # ------------------------------------------
-      # OWASP ZAP DAST Scan — Fixed Target URL
+      # Create ZAP Reports Directory
+      # ------------------------------------------
+      - name: Create ZAP Reports Directory
+        run: mkdir -p ${{ github.workspace }}/zap-reports
+
+      # ------------------------------------------
+      # OWASP ZAP DAST Scan — Fixed Permission Issue
       # ------------------------------------------
       - name: Run DAST Scan (OWASP ZAP Baseline)
         run: |
           TARGET_URL="${{ env.TEST_URL }}"
-
           echo "ZAP scanning target: $TARGET_URL"
 
-          /usr/bin/docker run \
-            -v ${{ github.workspace }}:/zap/wrk/:rw \
+          docker run \
+            -v ${{ github.workspace }}/zap-reports:/zap/wrk:rw \
             -w /zap/wrk \
-            --user "$(id -u):$(id -g)" \
+            --user 0 \
             --network host \
             -t ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
             -t "$TARGET_URL" \
-            -J /zap/wrk/report_json.json \
-            -w /zap/wrk/report_md.md \
-            -r /zap/wrk/report_html.html \
+            -J report_json.json \
+            -w report_md.md \
+            -r report_html.html \
             -a \
             -I \
             -D 2 \
             || echo "ZAP found issues — ignoring WARN/INFO (pipeline will not fail)"
 
-      # Upload ZAP reports as GitHub artifacts (v4)
+      # ------------------------------------------
+      # Upload ZAP Reports
+      # ------------------------------------------
       - name: Upload ZAP Reports
         uses: actions/upload-artifact@v4
         with:
           name: zap-reports
-          path: |
-            report_json.json
-            report_md.md
-            report_html.html
+          path: zap-reports/
 
       - name: Manual Approval Gate for Production Cutover
         uses: trstringer/manual-approval@v1
