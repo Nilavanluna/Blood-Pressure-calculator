@@ -51,10 +51,12 @@ jobs:
       - name: Set Script Permissions
         run: chmod +x scripts/*.sh
 
-      # NEW STEP: Convert the repository owner name to lowercase and set it as an env var.
-      # This resolves the 'Unrecognized function: toLower' error.
+      # FINAL FIX FOR TRIVY PARSING: Use BASH 'tr' command to convert the repository owner to lowercase.
+      # This bypasses the GitHub Actions parser error for the 'toLower' function.
       - name: Set Lowercase Repository Owner
-        run: echo "GHCR_OWNER=${{ toLower(github.repository_owner) }}" >> $GITHUB_ENV
+        run: |
+          LOWER_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "GHCR_OWNER=$LOWER_OWNER" >> $GITHUB_ENV
 
       - name: Deploy New Version to Staging-Green (Blue/Green Deployment)
         run: scripts/deploy-green.sh
@@ -73,7 +75,7 @@ jobs:
       - name: Run Vulnerability Scan (Security Features)
         uses: aquasecurity/trivy-action@master
         with:
-          # FIX: Reference the newly created lowercase environment variable (GHCR_OWNER)
+          # Reference the environment variable set in the previous step (GHCR_OWNER)
           image-ref: ghcr.io/${{ env.GHCR_OWNER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: 'table'
           exit-code: '1'
