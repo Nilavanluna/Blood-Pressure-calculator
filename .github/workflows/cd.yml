@@ -76,14 +76,9 @@ jobs:
           exit-code: '1'
           trivyignores: '.trivyignore' # Requires a .trivyignore file in root
 
-      # FINAL FIX for k6 Action
+      # FINAL FIX: Run k6 via Docker using a single, robust line command.
       - name: Run Performance Tests on Green Environment (k6)
-        uses: grafana/run-k6-action@v1
-        with:
-          # FIX: Use 'path' for the script location
-          path: scripts/performance-test.js
-          # FIX: Use 'flags' to pass environment variables using k6 --env syntax
-          flags: --env K6_BASE_URL=${{ env.TEST_URL }}
+        run: docker run --rm -v ${{ github.workspace }}:/app -w /app -e K6_BASE_URL=${{ env.TEST_URL }} grafana/k6 run scripts/performance-test.js
 
       # --- Authorization Gate: Manual Approval ---
       - name: Manual Approval Gate for Production Cutover
